@@ -18,6 +18,7 @@ class PrecomputedDataset(torch.utils.data.Dataset):
 
         self.data = []
         # load from cache
+
         for root, dirs, files in os.walk(self.data_dir):
             for file in files:
                 if file.endswith('.pt') and file[0] != ".":

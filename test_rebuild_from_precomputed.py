@@ -1,12 +1,4 @@
-import os, random, math
-import subprocess
-import numpy as np
-from tqdm import tqdm
-from pathlib import Path
-import cv2
-import torch
-from torchvision import transforms
-from PIL import Image
+
 from diffusers.utils import export_to_video
 from diffusers.video_processor import VideoProcessor
 
@@ -38,12 +30,13 @@ def _normalize_latents(
         latents = latents * latents_std / scaling_factor + latents_mean
     return latents
 
-file = "/media/eisneim/4T/ltx_data/game_p4_49x1024x576/wd_1735956772_0.pt"
+file = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cache_121x768x512/lwNQHu8yYwo_000028_000038_0.0_9.0.pt"
 data = torch.load(file)
 ll = data["latents"][0].unsqueeze(0)
 print(ll.shape)
 
-lt = _unpack_latents(ll.to(device, dtype=dtype), 7, 576//32,  1024//32)
+num_frames = 121; height = 512; width = 768
+lt = _unpack_latents(ll.to(device, dtype=dtype), (num_frames+7)//8, height//32, width//32)
 # denormolize
 lt = _normalize_latents(lt, vae.latents_mean, vae.latents_std, reverse=True)
 
@@ -55,4 +48,4 @@ with torch.no_grad():
     video =  vae.decode(lt, timestep, return_dict=False)[0]
 pcc = VideoProcessor(vae_scale_factor=32)
 vv = pcc.postprocess_video(video)[0]
-export_to_video(vv, "data/test_gamep4_1024x576-1-t0.05.mp4", fps=24)
+export_to_video(vv, "outputs/HbsniEGbyik_000030_000040_1.0_6.5.mp4", fps=24)

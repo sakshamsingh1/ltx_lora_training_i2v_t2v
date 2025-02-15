@@ -1,8 +1,8 @@
 model_name: "ltx_lora"
-id_token: "sounding object,"
-data_root: "/mnt/sda1/saksham/TI2AV/others/AVSync15/videos" # one type of resolution and num_frames; if you set precomputed_datasets this line will be ignored
+id_token: "sounding object, "
+data_root: "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cache_121x768x512" # one type of resolution and num_frames; if you set precomputed_datasets this line will be ignored
 precomputed_datasets: # a list of folder contain defferient resolutions and frames
-  - "/mnt/sda1/saksham/TI2AV/others/AVSync15/videos"
+  - "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cache_121x768x512"
   # - "/media/eisneim/4T/ltx_data_121x640x352"
 
 output_dir: "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/mixed"
@@ -58,9 +58,3 @@ validation_steps: 100000000000000000 # don't do validation
 
 tracker_name: ltx_trainer
 nccl_timeout: 1800
-
-
-
-
-
-

@@ -49,6 +49,9 @@ from utils.memory_utils import get_memory_statistics, free_memory, make_contiguo
 from utils.torch_utils import unwrap_model, align_device_and_dtype
 import logging
 
+import warnings
+warnings.filterwarnings("ignore")
+
 LOG_LEVEL = "INFO"
 # LOG_LEVEL = "DEBUG"
 logger = get_logger("ltxtrainer")
@@ -90,7 +93,7 @@ class Trainer:
         cd.setdefault("is_i2v", False) # t2v by default
         cd.setdefault("optimizer_8bit", True)
         cd.setdefault("optimizer_torchao", False)
-        cd.setdefault("caption_dropout_technique", "zero")
+        cd.setdefault("caption_dropout_technique", "phrase")
         cd.setdefault("noise_to_first_frame", 0.0)
         # ----------------- optimizer params --------
         cd.setdefault("optimizer" "adamw")
@@ -554,8 +557,8 @@ class Trainer:
                             prompt_embeds.fill_(0)
                             prompt_attention_mask.fill_(False)
 
-                            if "pooled_prompt_embeds" in text_conditions:
-                                text_conditions["pooled_prompt_embeds"].fill_(0)
+                            # if "pooled_prompt_embeds" in text_conditions:
+                            #     text_conditions["pooled_prompt_embeds"].fill_(0)
                     # randomly use short phrash embeddings
                     elif self.args.caption_dropout_technique == "phrase":
                         if random.random() < self.args.caption_dropout_p:
