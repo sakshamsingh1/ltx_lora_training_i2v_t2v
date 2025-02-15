@@ -1,14 +1,11 @@
 model_name: "ltx_lora"
-id_token: "freeze time, camera orbit left,"
-data_root: "/media/eisneim/4T/ltx_data" # one type of resolution and num_frames; if you set precomputed_datasets this line will be ignored
+id_token: "sounding object,"
+data_root: "/mnt/sda1/saksham/TI2AV/others/AVSync15/videos" # one type of resolution and num_frames; if you set precomputed_datasets this line will be ignored
 precomputed_datasets: # a list of folder contain defferient resolutions and frames
-  - "/media/eisneim/4T/ltx_data_49_blured"
-  - "/media/eisneim/4T/ltx_data_121_blured"
-  - "/media/eisneim/4T/ltx_data_65_blured"
+  - "/mnt/sda1/saksham/TI2AV/others/AVSync15/videos"
   # - "/media/eisneim/4T/ltx_data_121x640x352"
 
-
-output_dir: "/home/eisneim/www/ml/_video_gen/ltx_training/data_256/mixed"
+output_dir: "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/mixed"
 caption_dropout_p: 0.06
 caption_dropout_technique: "zero" # zero, phrase
 dataloader_num_workers: 4
@@ -26,7 +23,6 @@ seed: 7136
 mixed_precision: bf16
 batch_size: 6
 train_epochs: 200
-
 
 is_i2v: True
 noise_to_first_frame: 0.2

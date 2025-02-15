@@ -3,19 +3,17 @@ import subprocess
 import numpy as np
 from tqdm import tqdm
 from pathlib import Path
-import cv2
+import json
 import torch
 from torchvision import transforms
 from PIL import Image
 import gc
 
-
 os.environ['all_proxy']=''
 os.environ['all_proxy']=''
 
-import ollama
+# import ollama
 import base64
-# import decord
 import io
 from icecream import ic
 from constants import DEFAULT_HEIGHT_BUCKETS, DEFAULT_WIDTH_BUCKETS, DEFAULT_FRAME_BUCKETS
@@ -25,7 +23,7 @@ import psutil
 ic.disable()
 
 memusage = psutil.virtual_memory()[2]
-assert memusage < 85, "即将内存泄漏，需要清理内存后才能运行"
+assert memusage < 85, "Impending memory leak, memory needs to be cleared before running."
 
 def get_frames(inp: str, w: int, h: int, start_sec: float = 0, duration: float = None, f: int = None, fps = None) -> np.ndarray:
     args = []
@@ -48,15 +46,10 @@ def get_frames(inp: str, w: int, h: int, start_sec: float = 0, duration: float =
     process.terminate()
     return np.frombuffer(out, np.uint8).reshape(-1, h, w, 3) # b, h, w, c
 
-
 class Captioner():
     def __init__(self, model="minicpm-v:8b-2.6-q5_0", prompt=None):
-        # self.client = ollama.Client()
         self.model = model
-        # default_prompt = """describe this video in this order: camera angle, main subject, make the description short"""
         default_prompt = "describe this video in short"
-        # default_prompt = "people are pretenting to be a Mannequin in this video, describe the scene"
-        # default_prompt = "this video is a time freeze camera orbit shot, describe the scene"
         self.prompt = prompt or default_prompt
         
         start = ["The", "This"]
@@ -82,8 +75,6 @@ class Captioner():
     
     def remove_phrese(self, cap):
         # only keep the primary part of the caption
-        # if "\n\n" in cap:
-        #     cap = cap.split("\n\n")[0]
         cap = cap.replace("\n\n", "\n")
         
         for ii in self.should_remove_phrese:
@@ -119,6 +110,7 @@ class VideoFramesDataset(torch.utils.data.Dataset):
     def __init__(
         self, 
         video_dir, # list or string path
+        video_list_file: str,
         cache_dir: str,
         width: int = 1024,
         height: int = 576,
@@ -146,27 +138,29 @@ class VideoFramesDataset(torch.utils.data.Dataset):
         self.get_frames_max = get_frames_max
         self.prompt_prefix = prompt_prefix
         
-        # self.cach_frames_min = cach_frames_min
         self.videos = []
         self.data = []
-        
-        if isinstance(video_dir, str):
-            self.videos = self.load_videos(video_dir)
-        else:
-            for dd in video_dir:
-                self.videos += self.load_videos(dd)
+
+        video_list_file = os.path.join(video_dir, video_list_file)
+        with open(video_list_file, "r") as f:
+            self.videos = [os.path.join(video_dir, line.strip()) for line in f.readlines()]
+
+        # if isinstance(video_dir, str):
+        #     self.videos = self.load_videos(video_dir)
+        # else:
+        #     for dd in video_dir:
+        #         self.videos += self.load_videos(dd)
         
         print(f"{type(self).__name__} found {len(self.videos)} videos ")
 
-    def load_videos(self, dirname):
-        videos = []
-        for root, dirs, files in os.walk(dirname):
-            for file in files:
-                if (file.endswith('.mp4') or file.endswith('.mov')) and file[0] != ".":
-                    videos.append(os.path.join(root, file))
-        assert len(videos) > 0, "目标文件夹内没有视频文件"
-        
-        return videos
+    # def load_videos(self, dirname):
+    #     videos = []
+    #     for root, dirs, files in os.walk(dirname):
+    #         for file in files:
+    #             if (file.endswith('.mp4') or file.endswith('.mov')) and file[0] != ".":
+    #                 videos.append(os.path.join(root, file))
+    #     assert len(videos) > 0, "目标文件夹内没有视频文件"
+    #     return videos
     
     def to_tensor(self, data, device="cuda", dtype=torch.bfloat16):
         input = (data / 255) * 2.0 - 1.0
@@ -184,8 +178,8 @@ class VideoFramesDataset(torch.utils.data.Dataset):
                 continue
             try:
                 video_frames = get_frames(vid, self.width, self.height, 0,  f=self.get_frames_max, fps=self.fps)
-            except:
-                print("error file:", vid)
+            except Exception as e:
+                print("error file:", vid, e)
                 continue
             # remove first frame for frame blending motion blured video
             video_frames = video_frames[1:]
@@ -204,10 +198,11 @@ class VideoFramesDataset(torch.utils.data.Dataset):
             for idx in range(iters):
                 frames = video_frames[ idx*self.num_frames : (idx + 1) * self.num_frames ]
                 ic(frames.shape) 
-                caption = self.prompt_prefix + " " + to_caption(frames)
+                # caption = self.prompt_prefix + " " + to_caption(frames)
+                caption = self.prompt_prefix + " " + to_caption(vid)
                 ic(caption)
-                emebedding, mask = to_embedding(caption.replace("  ", " "))
-                ic(emebedding.shape, mask.shape)
+                embedding, mask = to_embedding(caption.replace("  ", " "))
+                ic(embedding.shape, mask.shape)
 
                 frames_t = self.to_tensor(frames, device=device)
                 ic(frames_t)
@@ -220,7 +215,7 @@ class VideoFramesDataset(torch.utils.data.Dataset):
                 assert not torch.isnan(ff.flatten()[0]), "nan encountered! abort!"
                 
                 captions.append(caption)
-                embedds.append(emebedding)
+                embedds.append(embedding)
                 masks.append(mask)
                 latents.append(latent)
                 first_frames.append(ff)
@@ -242,8 +237,8 @@ class VideoFramesDataset(torch.utils.data.Dataset):
 
             # Force garbage collection
             # gc.collect()
-            if ii % 20 == 0:
-                time.sleep(7) # wait for ollama to clean up
+            # if ii % 20 == 0:
+            #     time.sleep(7) # wait for ollama to clean up
 
             memusage = psutil.virtual_memory()[2]
             assert memusage < 80, "即将内存泄漏，强行关闭，请重新启动进程"
@@ -256,62 +251,54 @@ class VideoFramesDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return self.videos[idx]
 
+class Cog_Captions():
+    def __init__(self):
+        self.cog_caption_path = '/mnt/sda1/saksham/TI2AV/others/AVSync15/cog_train_captions.json'
+        self.caption_map = json.load(open(self.cog_caption_path, "r"))
+        
+    def get_caption(self, vid):
+        label, vid = vid.split("/")[-2:]
+        label = label.replace("__", " ").replace("_", " ")
+        vid = vid.rsplit(".", 1)[0]
+        text_caption = label + ", " + self.caption_map[vid]
+        return text_caption
 
 if __name__ == "__main__":
     import argparse
-    from yaml import load, dump, Loader, Dumper
+    from yaml import load, Loader
     from tqdm import tqdm
 
     from ltx_video_lora import *
-
-    # ------------------- 
     
-    video_dir = "/media/eisneim/红色T7/splat_screen_rec/_blured/game_p8"
-    cache_dir = "/media/eisneim/4T/ltx_data_65/game_p8_blured"
-
-    # video_dir = "/media/eisneim/红色T7/环绕拍摄/orbit_2x_blurd"
-    # cache_dir = "/media/eisneim/4T/ltx_data_65/blured_orbit"
-
-    # video_dir = "/media/eisneim/红色T7/dataset/cuted"
-    # cache_dir = "/media/eisneim/4T/ltx_data/mannequin"
-
-    # cache_dir = "/home/eisneim/www/ml/video_gen/ltx_training/data/ltxv_disney"
-    # video_dir = [
-    # ]
+    video_base_dir = "/mnt/sda1/saksham/TI2AV/others/AVSync15/videos"
+    video_list_file = "train_filter.txt"
+    cache_dir = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cache"
     
     config_file = "./configs/ltx.yaml"
     device = "cuda"
     dtype = torch.bfloat16
-    # prompt_prefix = "freeze time,"
-    prompt_prefix = "freeze time, camera orbit left,"
+    prompt_prefix = "sounding object, "
     # ------------------- 
 
     config_dict = load(open(config_file, "r"), Loader=Loader)
     args = argparse.Namespace(**config_dict)
 
-
     # ----------- prepare models -------------
     dataset = VideoFramesDataset(
-        video_dir=video_dir,
+        video_dir=video_base_dir,
+        video_list_file=video_list_file,
         cache_dir=cache_dir,
-        # width=1024,
-        # height=576,
-        # num_frames= 49,
-        # width=512,
-        # height=288,
-        # num_frames= 121,
-        width=960,
-        height=544,
-        num_frames= 65,
+        width=768,
+        height=512,
+        num_frames=121,
         prompt_prefix=prompt_prefix,
     )
 
-    captioner = Captioner()
+    captioner = Cog_Captions()
     cond_models = load_condition_models()
     tokenizer, text_encoder = cond_models["tokenizer"], cond_models["text_encoder"]
     text_encoder = text_encoder.to(device, dtype=dtype)
     vae = load_latent_models()["vae"].to(device, dtype=dtype)
-
 
     def to_latent(frames_tensor):
         # vaedtype = next(vae.parameters()).dtype
@@ -336,10 +323,8 @@ if __name__ == "__main__":
             prompt_embeds = text_conditions["prompt_embeds"].to("cpu", dtype=dtype)
             prompt_attention_mask = text_conditions["prompt_attention_mask"].to("cpu", dtype=dtype)
         return prompt_embeds, prompt_attention_mask
-
-
+    
     dataset.cache_frames(to_latent, captioner.get_caption, to_embedding)
-
     print("done!")
 
 

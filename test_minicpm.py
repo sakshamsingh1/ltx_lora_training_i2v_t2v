@@ -13,7 +13,7 @@ def pil_to_base64(image):
   byte_stream.seek(0)
   return base64.b64encode(byte_stream.read()).decode('utf-8')
 
-video_file = './data/test.mp4'
+video_file = '/mnt/sda1/saksham/TI2AV/others/AVSync15/videos/hammering/Hmp0x7LBCo0_000008_000018_1.0_5.5.mp4'
 video_reader = decord.VideoReader(video_file)
 decord.bridge.set_bridge("torch")
 video = video_reader.get_batch(
@@ -25,7 +25,7 @@ print("video", video.shape)
 frames = [transforms.ToPILImage()(image.permute(2, 0, 1)).convert("RGB").resize((640, 360)) for image in video]
 # frames[0].save("data/test_frame.jpg")
 
-images = [ pil_to_base64(image) for image in frames]
+images = [pil_to_base64(image) for image in frames]
 print("images", len(images))
 
 # with open("data/base64_test.png", "wb") as fh:

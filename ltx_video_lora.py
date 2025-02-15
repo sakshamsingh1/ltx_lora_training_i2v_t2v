@@ -10,7 +10,6 @@ from PIL import Image
 from diffusers.utils.torch_utils import randn_tensor
 
 
-
 logger = get_logger("ltx_train")  # pylint: disable=invalid-name
 MODEL_ID = "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
 # MODEL_ID = "./data/fused"
