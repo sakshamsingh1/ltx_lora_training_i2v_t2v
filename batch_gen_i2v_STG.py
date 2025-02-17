@@ -6,21 +6,29 @@ import torch
 from pipeline_stg_ltx_image2video import LTXImageToVideoSTGPipeline
 from diffusers.utils import export_to_video, load_image
 
-LORA_WEIGHT = 0.8
+USE_ORIG_MODEL = False
+
 # width = 1024
 # height = 576
 # width = 736
 # height = 416
-width = 704
-height = 480
+width = 768
+height = 512
 num_frames=121
-lora_path = "/home/eisneim/www/ml/video_gen/ltx_training/data/ckpt_27k"
-prefix = "freeze time, camera orbit left, " 
+lora_path = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/mixed/"
+prefix = "" 
 negative_prompt = "worst quality, inconsistent motion, blurry, jittery, distorted"
+NUM_INF = 150
 
-images_dir = "data/images/dimx_part1/"
+images_dir = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/first_frame_test"
+
+LORA_WEIGHT = 0.8 #0.8
 # images_dir = "data/portrait_img/"
-output_dir = "data/outputs/i2v_2-11"
+output_dir = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/outputs/output_test"
+
+if USE_ORIG_MODEL:
+    LORA_WEIGHT = 0.0 #0.8
+    output_dir = "outputs/output_test_orig"
 
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
@@ -30,17 +38,25 @@ for ii in os.listdir(images_dir):
     if ii.endswith(".jpg") and ii[0] != ".":
         file = os.path.join(images_dir, ii)
         prompt = open(os.path.join(images_dir, ii.rsplit(".", 1)[0] + ".txt"), "r").read()
+        if USE_ORIG_MODEL:
+            parts = prompt.split(",", 2)
+            prompt = parts[-1]
+            print(prompt)
         prompt = prompt.replace("The image", "The video")
         pairs.append((file, prompt))
+
+random.seed(0)
+random.shuffle(pairs)
+pairs = pairs[:NUM_INF]
 
 print("loaded images", len(pairs))
 pairs.sort(key=lambda tt: os.path.basename(tt[0]))
 
 pipe = LTXImageToVideoSTGPipeline.from_pretrained("a-r-r-o-w/LTX-Video-0.9.1-diffusers", torch_dtype=torch.bfloat16, local_files_only=True)
 
-
-pipe.load_lora_weights(lora_path, weight_name="pytorch_lora_weights.safetensors", adapter_name="orbit")
-pipe.set_adapters("orbit", LORA_WEIGHT)
+if not USE_ORIG_MODEL:
+    pipe.load_lora_weights(lora_path, weight_name="pytorch_lora_weights.safetensors", adapter_name="orbit")
+    pipe.set_adapters("orbit", LORA_WEIGHT)
 
 pipe.to("cuda")
 
@@ -48,7 +64,6 @@ stg_mode = "STG-A" # STG-A, STG-R
 stg_applied_layers_idx = [19] # 0~27
 stg_scale = 1.0 # 0.0 for CFG
 do_rescaling = True # Default (False)
-
 
 for idx in range(len(pairs)):
     file, prompt = pairs[idx]
