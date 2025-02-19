@@ -133,7 +133,9 @@ class VideoFramesDataset(torch.utils.data.Dataset):
         self.video_dir = video_dir
         
         self.cache_dir = Path(f"{cache_dir}_{num_frames}x{width}x{height}")
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # self.cache_dir.mkdir(parents=True, exist_ok=True)
+        os.makedirs(self.cache_dir, exist_ok=True)
+        print("cache_dir:", self.cache_dir)
         
         self.get_frames_max = get_frames_max
         self.prompt_prefix = prompt_prefix
@@ -272,9 +274,9 @@ if __name__ == "__main__":
     
     video_base_dir = "/mnt/sda1/saksham/TI2AV/others/AVSync15/videos"
     video_list_file = "train_filter.txt"
-    cache_dir = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cache"
+    cache_dir = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cacheNew"
     
-    config_file = "./configs/ltx.yaml"
+    config_file = "./configs/ltx_new.yaml"
     device = "cuda"
     dtype = torch.bfloat16
     prompt_prefix = "sounding object, "
@@ -288,8 +290,8 @@ if __name__ == "__main__":
         video_dir=video_base_dir,
         video_list_file=video_list_file,
         cache_dir=cache_dir,
-        width=768,
-        height=512,
+        width=args.width,
+        height=args.height,
         num_frames=121,
         prompt_prefix=prompt_prefix,
     )

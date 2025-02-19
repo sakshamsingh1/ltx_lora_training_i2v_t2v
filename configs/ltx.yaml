@@ -17,6 +17,9 @@ pretrained_model_name_or_path: "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
 flow_resolution_shifting: True
 seed: 7136
 
+height: 512
+width: 768
+
 # mixed_precision: "no"
 # batch_size: 4
 
