@@ -305,3 +305,24 @@ class VAEAudioAnalyse:
         spec_audio = self.vocoder.inference(denorm_spec)
         write(save_path, 16000, spec_audio[0])
         # export_to_wav(spec_audio, save_path)
+
+    def output_to_audio(self, ltx_image, save_path="output.wav"):
+        """
+        1) Decode latents -> spectrogram
+        2) Convert spectrogram -> audio
+        3) Save to disk
+        """
+
+        # spectrogram_decoded = spectrogram_decoded[:,:,0][0]
+        ltx_image = ltx_image.to(self.device, self.dtype)
+        pcc = VideoProcessor(vae_scale_factor=32)
+        vv = pcc.postprocess_video(ltx_image)[0]
+
+        output_spec = torch.from_numpy(vv)[0].permute(2, 0, 1)
+        output_spec = output_spec.to(device=self.device, dtype=self.dtype)
+        denorm_spec = denormalize_spectrogram(output_spec)
+        
+        spec_audio = self.vocoder.inference(denorm_spec)
+        write(save_path, 16000, spec_audio[0])
+        # export_to_wav(spec_audio, save_path)
+    
