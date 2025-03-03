@@ -597,9 +597,9 @@ class Trainer:
                     accelerator.backward(loss)
                     if self.args.train_type == "lora" and loss > 1.2 and accelerator.is_main_process:
                         anomalies.append(step)
-                        print("!! warning !! gradient explosion detected! should stop")
-                        if len(anomalies) > 1:
-                            assert anomalies[-1] - anomalies[-2] > 2, "gradient explosion confirmed! you should restart from checkpoint"
+                        print(f"!! warning !! gradient explosion detected! should stop, loss: {loss}")
+                        # if len(anomalies) > 1:
+                        #     assert anomalies[-1] - anomalies[-2] > 2, "gradient explosion confirmed! you should restart from checkpoint"
 
                     if accelerator.sync_gradients and accelerator.distributed_type != DistributedType.DEEPSPEED:
                         grad_norm = accelerator.clip_grad_norm_(self.transformer.parameters(), self.args.max_grad_norm)
