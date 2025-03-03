@@ -1,8 +1,8 @@
 model_name: "ltx_lora"
 id_token: "sounding object, "
-data_root: "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/cache_audio" # one type of resolution and num_frames; if you set precomputed_datasets this line will be ignored
+data_root: "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/cache_audio_256x512" # one type of resolution and num_frames; if you set precomputed_datasets this line will be ignored
 precomputed_datasets: # a list of folder contain defferient resolutions and frames
-  - "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/cache_audio" # TODO
+  - "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/cache_audio_256x512" # TODO
 
 output_dir: "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/only_audio"
 caption_dropout_p: 0.06
@@ -26,7 +26,7 @@ mixed_precision: bf16
 batch_size: 6
 train_epochs: 200
 
-is_i2v: True
+is_i2v: False
 noise_to_first_frame: 0.2
 train_type: "lora"
 rank: 256

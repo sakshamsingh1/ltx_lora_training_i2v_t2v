@@ -56,7 +56,7 @@ class AudioDataset(torch.utils.data.Dataset):
             self.audios = [os.path.join(audio_dir, aud_id) for aud_id in aud_ids]
         
         #################### Quick test ####################
-        self.audios = self.audios[:10]
+        # self.audios = self.audios[:10]
         #################### Quick test ####################
 
         print(f"{type(self).__name__} found {len(self.audios)} videos ")
