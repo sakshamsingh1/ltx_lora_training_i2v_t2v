@@ -1,10 +1,10 @@
 model_name: "ltx_lora"
 id_token: "sounding object, "
-data_root: "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cache_121x768x512" # one type of resolution and num_frames; if you set precomputed_datasets this line will be ignored
+data_root: "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/cache_audio" # one type of resolution and num_frames; if you set precomputed_datasets this line will be ignored
 precomputed_datasets: # a list of folder contain defferient resolutions and frames
-  - "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cache_audio" # TODO
+  - "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/cache_audio" # TODO
 
-output_dir: "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/mixed"
+output_dir: "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/only_audio"
 caption_dropout_p: 0.06
 caption_dropout_technique: "zero" # zero, phrase
 dataloader_num_workers: 4
@@ -16,8 +16,8 @@ pretrained_model_name_or_path: "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
 flow_resolution_shifting: True
 seed: 7136
 
-height: 512
-width: 768
+mel_bins: 256
+spec_time_bins: 512
 
 # mixed_precision: "no"
 # batch_size: 4

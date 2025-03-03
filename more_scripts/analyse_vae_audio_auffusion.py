@@ -254,17 +254,18 @@ def get_vocoder(device, dtype):
     return vocoder 
 
 class VAEAudioAnalyse:
-    def __init__(self):
+    def __init__(self, spec_time_bins=1024):
         self.device = "cuda"
         self.dtype = torch.float16
         self.vae = load_latent_models()["vae"].to(self.device, dtype=self.dtype)
         self.vocoder = get_vocoder(self.device, self.dtype)
+        self.spec_time_bins = spec_time_bins
 
     def audio_to_latent(self, audio_path):
         audio, sr = load_wav(audio_path)
         audio, spec = get_mel_spectrogram_from_audio(audio)
         norm_spec = normalize_spectrogram(spec)
-        norm_spec = pad_spec(norm_spec, 1024)
+        norm_spec = pad_spec(norm_spec, self.spec_time_bins)
         norm_spec = normalize(norm_spec)
         frame_t = to_tensor(norm_spec, self.device, self.dtype)
 
@@ -285,7 +286,7 @@ class VAEAudioAnalyse:
         """
         latents = latents.to(self.device, self.dtype)
         
-        latents = _unpack_latents(latents, 1, 256//32, 1024//32)
+        latents = _unpack_latents(latents, 1, 256//32, self.spec_time_bins//32)
         latents = _normalize_latents(latents, self.vae.latents_mean, self.vae.latents_std, reverse=True)
 
         timestep = torch.tensor([0.05], device=self.device, dtype=self.dtype)
@@ -300,7 +301,6 @@ class VAEAudioAnalyse:
         output_spec = torch.from_numpy(vv)[0].permute(2, 0, 1)
         output_spec = output_spec.to(device=self.device, dtype=self.dtype)
         denorm_spec = denormalize_spectrogram(output_spec)
-        # import pdb; pdb.set_trace()
         
         spec_audio = self.vocoder.inference(denorm_spec)
         write(save_path, 16000, spec_audio[0])

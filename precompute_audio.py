@@ -1,21 +1,16 @@
-import os, random, math, time
-import subprocess
-import numpy as np
+import os
 from tqdm import tqdm
 from pathlib import Path
 import json
 import torch
-from torchvision import transforms
-from PIL import Image
+import pandas as pd
 
-os.environ['all_proxy']=''
-os.environ['all_proxy']=''
+# os.environ['all_proxy']=''
+# os.environ['all_proxy']=''
 
-# import ollama
-import base64
-import io
 from icecream import ic
 from constants import DEFAULT_HEIGHT_BUCKETS, DEFAULT_WIDTH_BUCKETS, DEFAULT_FRAME_BUCKETS
+from audio_helpers.aud_latent_utils import load_wav, get_mel_spectrogram_from_audio, normalize_spectrogram, pad_spec, normalize, to_tensor
 # if there is a memery leak in the code, we'll shut it down manually
 import psutil
 
@@ -24,184 +19,97 @@ ic.disable()
 memusage = psutil.virtual_memory()[2]
 assert memusage < 85, "Impending memory leak, memory needs to be cleared before running."
 
-def get_frames(inp: str, w: int, h: int, start_sec: float = 0, duration: float = None, f: int = None, fps = None) -> np.ndarray:
-    args = []
-    if duration is not None:
-        args += ["-t", f"{duration:.2f}"]
-    elif f is not None:
-        args += ["-frames:v", str(f)]
-    if fps is not None:
-        args += ["-r", str(fps)]
-    
-    args = ["ffmpeg", "-nostdin", "-ss", f"{start_sec:.2f}", "-i", inp, *args, 
-        "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "pipe:"]
-    
-    process = subprocess.Popen(args, stderr=-1, stdout=-1)
-    out, err = process.communicate()
-    retcode = process.poll()
-    if retcode:
-        raise Exception(f"{inp}: ffmpeg error: {err.decode('utf-8')}")
-
-    process.terminate()
-    return np.frombuffer(out, np.uint8).reshape(-1, h, w, 3) # b, h, w, c
-
-class Captioner():
-    def __init__(self, model="minicpm-v:8b-2.6-q5_0", prompt=None):
-        self.model = model
-        default_prompt = "describe this video in short"
-        self.prompt = prompt or default_prompt
-        
-        start = ["The", "This"]
-        kind = ["video", "image", "scene", "animated sequence"]
-        act = ["displays", "shows", "features", "is", "depicts", "presents", "showcases", "captures" ]
-        
-        bad_phrese = []
-        for ss in start:
-            for kk in kind:
-                for aa in act:
-                    bad_phrese.append(f"{ss} {kk} {aa}")
-                    
-        self.should_remove_phrese=[
-            "In the video",
-        ] + bad_phrese
-        
-    @staticmethod
-    def pil_to_base64(image):
-      byte_stream = io.BytesIO()
-      image.save(byte_stream, format='JPEG')
-      byte_stream.seek(0)
-      return base64.b64encode(byte_stream.read()).decode('utf-8')
-    
-    def remove_phrese(self, cap):
-        # only keep the primary part of the caption
-        cap = cap.replace("\n\n", "\n")
-        
-        for ii in self.should_remove_phrese:
-            cap = cap.replace(ii, "")
-            
-        return cap
-        
-    def get_caption(self, frames, size=(640, 320), frame_skip=2):
-        self.client = ollama.Client()
-
-        # 24fps to 8fps
-        frames = frames[::frame_skip]
-        if isinstance(frames, np.ndarray):
-            frames = [Image.fromarray(image).convert("RGB").resize(size) for image in frames]
-        else:
-            frames = [transforms.ToPILImage()(image.permute(2, 0, 1)).convert("RGB").resize(size) for image in frames]
-        images = [ self.pil_to_base64(image) for image in frames]
-        
-        response = self.client.chat(
-            model=self.model,
-            keep_alive="6s",
-            options=dict(num_predict=128),
-            messages=[{
-              "role":"user",
-              "content": self.prompt, # "describe this video in short",
-              "images": images }
-            ]
-        )
-        cap = response["message"]["content"]
-        return self.remove_phrese(cap)
-        
-class VideoFramesDataset(torch.utils.data.Dataset):
+class AudioDataset(torch.utils.data.Dataset):
     def __init__(
         self, 
-        video_dir, # list or string path
-        video_list_file: str,
+        audio_dir, # list or string path
+        aud_list_file: str,
         cache_dir: str,
-        width: int = 1024,
-        height: int = 576,
-        num_frames: int = 49, 
-        fps: int = 24,
-        get_frames_max: int = 50 * 24, # prevent super long videos
+        spec_time_bins: int = 512, # ~5 sec
+        mel_bins: int = 256,
         prompt_prefix = "freeze time, camera orbit left,",
+        device = "cuda",
+        dtype = torch.bfloat16,
     ):
         super().__init__()
-        assert width in DEFAULT_WIDTH_BUCKETS, f"width only supported in: {DEFAULT_WIDTH_BUCKETS}"
-        assert height in DEFAULT_HEIGHT_BUCKETS, f"height only supported in: {DEFAULT_HEIGHT_BUCKETS}"
-        assert num_frames in DEFAULT_FRAME_BUCKETS, f"frames should in: {DEFAULT_FRAME_BUCKETS}"
+        assert spec_time_bins in DEFAULT_WIDTH_BUCKETS, f"width only supported in: {DEFAULT_WIDTH_BUCKETS}"
+        assert mel_bins in DEFAULT_HEIGHT_BUCKETS, f"height only supported in: {DEFAULT_HEIGHT_BUCKETS}"
         
-        self.width = width
-        self.height = height
-        self.num_frames = num_frames
-        self.fps = fps
-        self.video_dir = video_dir
+        self.spec_time_bins = spec_time_bins
+        self.mel_bins = mel_bins
+        self.audio_dir = audio_dir
         
-        self.cache_dir = Path(f"{cache_dir}_{num_frames}x{width}x{height}")
+        self.cache_dir = Path(f"{cache_dir}_{self.mel_bins}x{self.spec_time_bins}")
         os.makedirs(self.cache_dir, exist_ok=True)
         print("cache_dir:", self.cache_dir)
         
-        self.get_frames_max = get_frames_max
+        self.device = device
+        self.dtype = dtype
         self.prompt_prefix = prompt_prefix
         
-        self.videos = []
+        self.audios = []
         self.data = []
 
-        video_list_file = os.path.join(video_dir, video_list_file)
-        with open(video_list_file, "r") as f:
-            self.videos = [os.path.join(video_dir, line.strip()) for line in f.readlines()]
+        audio_file = aud_list_file
+        with open(audio_file, "r") as f:
+            aud_ids = [os.path.basename(line.strip()).replace('.mp4','.wav') for line in f.readlines()]
+            self.audios = [os.path.join(audio_dir, aud_id) for aud_id in aud_ids]
         
-        print(f"{type(self).__name__} found {len(self.videos)} videos ")
+        #################### Quick test ####################
+        self.audios = self.audios[:10]
+        #################### Quick test ####################
+
+        print(f"{type(self).__name__} found {len(self.audios)} videos ")
     
-    def to_tensor(self, data, device="cuda", dtype=torch.bfloat16):
-        input = (data / 255) * 2.0 - 1.0
-        # from (t, h, w, c) to b (t  c, h, w)
-        return torch.from_numpy(input).permute(0, 3, 1, 2).unsqueeze(0).to(device, dtype=dtype)
+    def get_norm_spec(self, audio_path):
+        audio, sr = load_wav(audio_path)
+        audio, spec = get_mel_spectrogram_from_audio(audio)
+        norm_spec = normalize_spectrogram(spec)
+        norm_spec = pad_spec(norm_spec, self.spec_time_bins)
+        norm_spec = normalize(norm_spec)
+        norm_spec = to_tensor(norm_spec, self.device, self.dtype)
+        return norm_spec
 
-    def cache_frames(self, to_latent, to_caption, to_embedding, device="cuda"):
-        print(f"building caches, video count: {len(self.videos)}")
+    def cache_frames(self, to_latent, to_caption, to_embedding):
+        print(f"building caches, video count: {len(self.audios)}")
 
-        for ii, vid in enumerate(tqdm(self.videos)):
-            dest = os.path.join(self.cache_dir, os.path.basename(vid).rsplit(".", 1)[0] + ".pt")
+        for ii, aud_path in enumerate(tqdm(self.audios)):
+            dest = os.path.join(self.cache_dir, os.path.basename(aud_path).rsplit(".", 1)[0] + ".pt")
             ic(dest)
             if os.path.exists(dest):
                 # print("skip:", dest)
                 continue
             try:
-                video_frames = get_frames(vid, self.width, self.height, 0,  f=self.get_frames_max, fps=self.fps)
+                norm_spec = self.get_norm_spec(aud_path)
             except Exception as e:
-                print("error file:", vid, e)
+                print("error file:", aud_path, e)
                 continue
             # remove first frame for frame blending motion blured video
-            video_frames = video_frames[1:]
 
-            if len(video_frames) < self.num_frames:
-                continue
             # divid into parts
-            iters = len(video_frames) // self.num_frames
+            iters = 1 # let's fix it to 1 for now
             latents = []
             embedds = []
             masks = []
             captions = []
             infos = []
-            first_frames = []
 
             for idx in range(iters):
-                frames = video_frames[ idx*self.num_frames : (idx + 1) * self.num_frames ]
-                ic(frames.shape) 
-                # caption = self.prompt_prefix + " " + to_caption(frames)
-                caption = self.prompt_prefix + " " + to_caption(vid)
+                caption = self.prompt_prefix + " " + to_caption(aud_path)
                 ic(caption)
                 embedding, mask = to_embedding(caption.replace("  ", " "))
                 ic(embedding.shape, mask.shape)
 
-                frames_t = self.to_tensor(frames, device=device)
-                ic(frames_t)
-                latent, num_frames, height, width = to_latent(frames_t)
+                ic(norm_spec)
+                latent, num_frames, height, width = to_latent(norm_spec)
                 assert latent.ndim == 3, "patched latent should have 3 dims"
                 ic(latent.shape, latent)
-                ff, _, _, _ = to_latent(frames_t[:, 0:1, :, :, :])
-                ic(ff)
                 # make sure is not nan
-                assert not torch.isnan(ff.flatten()[0]), "nan encountered! abort!"
                 
                 captions.append(caption)
                 embedds.append(embedding)
                 masks.append(mask)
                 latents.append(latent)
-                first_frames.append(ff)
                 infos.append(dict(num_frames=num_frames, height=height, width=width))
 
             latents = torch.cat(latents, dim=0)
@@ -214,35 +122,32 @@ class VideoFramesDataset(torch.utils.data.Dataset):
               embedds=embedds, 
               masks=masks, 
               captions=captions, 
-              first_frames=first_frames,
               meta_info=infos), dest)
             self.data.append(dest)
-
-            # Force garbage collection
-            # gc.collect()
-            # if ii % 20 == 0:
-            #     time.sleep(7) # wait for ollama to clean up
 
             memusage = psutil.virtual_memory()[2]
             assert memusage < 80, "即将内存泄漏，强行关闭，请重新启动进程"
             
         print(f">> cached {len(self.data)} videos")
     
-    def __len__(self):
-        return len(self.data)
-    
     def __getitem__(self, idx):
-        return self.videos[idx]
+        return self.audios[idx]
 
-class Cog_Captions():
+class Qwen_Captions():
     def __init__(self):
-        self.cog_caption_path = '/mnt/sda1/saksham/TI2AV/others/AVSync15/cog_train_captions.json'
+        self.cog_caption_path = '/mnt/ssd0/saksham/i2av/AVSync15/aud_caption.json'
         self.caption_map = json.load(open(self.cog_caption_path, "r"))
-        
-    def get_caption(self, vid):
-        label, vid = vid.split("/")[-2:]
+        self.vid_label_map = self.get_label_map()
+    
+    def get_label_map(self):
+        meta_path='/home/sxk230060/ltx_lora_training_i2v_t2v/preprocess/asva_metadata.csv'
+        df = pd.read_csv(meta_path)
+        return dict(zip(df["vid"], df["label"]))
+
+    def get_caption(self, aud_path):
+        vid = os.path.basename(aud_path).rsplit(".", 1)[0]
+        label = self.vid_label_map[vid]
         label = label.replace("__", " ").replace("_", " ")
-        vid = vid.rsplit(".", 1)[0]
         text_caption = label + ", " + self.caption_map[vid]
         return text_caption
 
@@ -255,9 +160,9 @@ if __name__ == "__main__":
     
     aud_base_dir = "/mnt/ssd0/saksham/i2av/AVSync15/audios_together"
     aud_list_file = '/home/sxk230060/TI2AV/data/AVSync15/train.txt'
-    cache_dir = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cache_audio"
+    cache_dir = "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/cache_audio"
     
-    config_file = "./configs/ltx_new.yaml"
+    config_file = "./configs/ltx_audio.yaml"
     device = "cuda"
     dtype = torch.bfloat16
     prompt_prefix = "sounding object, "
@@ -267,30 +172,30 @@ if __name__ == "__main__":
     args = argparse.Namespace(**config_dict)
 
     # ----------- prepare models -------------
-    dataset = VideoFramesDataset(
-        video_dir=video_base_dir,
-        video_list_file=video_list_file,
+    dataset = AudioDataset(
+        audio_dir=aud_base_dir,
+        aud_list_file=aud_list_file,
         cache_dir=cache_dir,
-        width=args.width,
-        height=args.height,
-        num_frames=121,
+        mel_bins=args.mel_bins,
+        spec_time_bins=args.spec_time_bins,
         prompt_prefix=prompt_prefix,
+        device = device,
+        dtype = dtype
     )
 
-    captioner = Cog_Captions()
+    captioner = Qwen_Captions()
     cond_models = load_condition_models()
     tokenizer, text_encoder = cond_models["tokenizer"], cond_models["text_encoder"]
     text_encoder = text_encoder.to(device, dtype=dtype)
     vae = load_latent_models()["vae"].to(device, dtype=dtype)
 
-    def to_latent(frames_tensor):
-        # vaedtype = next(vae.parameters()).dtype
-        ic(frames_tensor.shape)
-        assert frames_tensor.size(2) == 3, f"frames should be in shape: (b, f, c, h, w) provided: {frames_tensor.shape}"
+    def to_latent(norm_spec):
+        ic(norm_spec.shape)
+        assert norm_spec.size(2) == 3, f"frames should be in shape: (b, f, c, h, w) provided: {norm_spec.shape}"
         with torch.no_grad():
             data = prepare_latents(
                     vae=vae,
-                    image_or_video=frames_tensor,
+                    image_or_video=norm_spec,
                     device=device,
                     dtype=dtype,
                 )
@@ -309,5 +214,3 @@ if __name__ == "__main__":
     
     dataset.cache_frames(to_latent, captioner.get_caption, to_embedding)
     print("done!")
-
-
