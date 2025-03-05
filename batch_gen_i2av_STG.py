@@ -42,7 +42,7 @@ stg_scale = 1.0 # 0.0 for CFG
 do_rescaling = True # Default (False)
 
 negative_prompt_v = "worst quality, inconsistent motion, blurry, jittery, distorted"
-USE_LORA_V = True
+USE_LORA_V = False
 
 lora_dir_v = "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/i2v_lora"
 pipe_v = LTXImageToVideoSTGPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16, local_files_only=False)
@@ -58,7 +58,7 @@ aud_caption_map = json.load(open(aud_caption_path))
 USE_LORA_A = True
 lora_dir_a = '/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/only_audio_1000'
 pipe_a = LTXPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16, local_files_only=True)
-if USE_LORA_V:
+if USE_LORA_A:
     pipe_a.load_lora_weights(lora_dir_a, weight_name="pytorch_lora_weights.safetensors", adapter_name="ltx_lora")
     pipe_a.set_adapters("ltx_lora", LORA_WEIGHT)
     output_base_dir += "_lora_a"
@@ -120,4 +120,4 @@ for idx, row in df.iterrows():
     vae_obj.latent_to_audio(video, save_path_a)
 
     #Combine
-    combine(save_path_v, save_path_a, os.path.join(output_base_dir, f'{row["vid"]}.mp4'))
+    combine(save_path_v, save_path_a, os.path.join(output_base_dir, f'av_{row["vid"]}.mp4'))
