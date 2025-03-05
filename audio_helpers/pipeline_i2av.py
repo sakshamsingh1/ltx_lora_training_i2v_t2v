@@ -62,10 +62,6 @@ class LTXI2AVPipeline(LTXPipeline):
         #maybe important later
         timesteps: List[int] = None,
         guidance_scale: float = 3,
-        prompt_embeds: Optional[torch.Tensor] = None,
-        prompt_attention_mask: Optional[torch.Tensor] = None,
-        negative_prompt_embeds: Optional[torch.Tensor] = None,
-        negative_prompt_attention_mask: Optional[torch.Tensor] = None,
         latents: Optional[torch.Tensor] = None,
         return_dict: bool = True,
         callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
@@ -91,16 +87,15 @@ class LTXI2AVPipeline(LTXPipeline):
                 replace_processor = STGLTXVideoAttentionProcessor2_0()
                 self.replace_layer_processor(layers, replace_processor, stg_applied_layers_idx)
             elif stg_mode == "STG-R":
-                for i in stg_applied_layers_idx:
-                    self.transformer.transformer_blocks[i].forward = types.MethodType(forward_with_stg, self.transformer.transformer_blocks[i])
+                raise NotImplementedError("STG-R is not implemented yet.")
 
         # 2. Define call parameters
-        if prompt is not None and isinstance(prompt, str):
+        if prompt_vid is not None and isinstance(prompt_vid, str):
             batch_size = 1
-        elif prompt is not None and isinstance(prompt, list):
-            batch_size = len(prompt)
+        elif prompt_vid is not None and isinstance(prompt_vid, list):
+            batch_size = len(prompt_vid)
         else:
-            batch_size = prompt_embeds.shape[0]
+            raise ValueError("Prompt must be a string or a list of strings.")
 
         device = self._execution_device
 
