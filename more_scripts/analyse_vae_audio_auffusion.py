@@ -4,7 +4,7 @@ from huggingface_hub import snapshot_download
 import torch.nn.functional as F
 from scipy.io.wavfile import read
 import random
-from auffusion_vocoder import Generator
+from more_scripts.auffusion_vocoder import Generator
 from diffusers.video_processor import VideoProcessor
 from scipy.io.wavfile import write
 

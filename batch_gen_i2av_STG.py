@@ -9,7 +9,6 @@ from pipeline_stg_ltx_image2video import LTXImageToVideoSTGPipeline
 from more_scripts.analyse_vae_audio_auffusion import VAEAudioAnalyse
 from diffusers.utils import export_to_video, load_image
 
-
 def combine(video_path, audio_path, output_path, remove=True):
     video_clip = VideoFileClip(video_path)
     new_audio_clip = AudioFileClip(audio_path)
@@ -22,7 +21,7 @@ def combine(video_path, audio_path, output_path, remove=True):
 
 ####################### initialising parameters #######################
 model_id = "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
-images_dir = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/first_frame_test"
+images_dir = "/mnt/ssd0/saksham/i2av/AVSync15/first_frame"
 
 LORA_WEIGHT = 0.8
 prefix = "sounding object"
@@ -46,7 +45,7 @@ negative_prompt_v = "worst quality, inconsistent motion, blurry, jittery, distor
 USE_LORA_V = True
 
 lora_dir_v = "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/i2v_lora"
-pipe_v = LTXImageToVideoSTGPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16, local_files_only=True)
+pipe_v = LTXImageToVideoSTGPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16, local_files_only=False)
 if USE_LORA_V:
     pipe_v.load_lora_weights(lora_dir_v, weight_name="pytorch_lora_weights.safetensors", adapter_name="ltx_lora")
     pipe_v.set_adapters("ltx_lora", LORA_WEIGHT)
