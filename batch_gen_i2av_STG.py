@@ -55,7 +55,7 @@ pipe_v.to("cuda")
 #I2A
 aud_caption_path = '/mnt/ssd0/saksham/i2av/AVSync15/aud_caption.json'
 aud_caption_map = json.load(open(aud_caption_path))
-USE_LORA_A = True
+USE_LORA_A = False
 lora_dir_a = '/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/only_audio_1000'
 pipe_a = LTXPipeline.from_pretrained(model_id, torch_dtype=torch.bfloat16, local_files_only=True)
 if USE_LORA_A:
@@ -64,6 +64,10 @@ if USE_LORA_A:
     output_base_dir += "_lora_a"
 pipe_a.to("cuda")
 negative_prompt_a = ""
+
+if (not USE_LORA_A) and (not USE_LORA_V):
+    output_base_dir += "no_lora"
+
 os.makedirs(output_base_dir, exist_ok=True)
 
 meta_path = '/home/sxk230060/ltx_lora_training_i2v_t2v/preprocess/asva_metadata.csv'
