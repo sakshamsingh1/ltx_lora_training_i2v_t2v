@@ -1,38 +1,29 @@
 model_name: "ltx_lora"
 id_token: "sounding object, "
-data_root: "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cache_121x768x512" # one type of resolution and num_frames; if you set precomputed_datasets this line will be ignored
-precomputed_datasets: # a list of folder contain defferient resolutions and frames
-  - "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cache_121x768x512"
-  # - "/media/eisneim/4T/ltx_data_121x640x352"
 
-output_dir: "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/mixed_test"
+prefix: "sounding object, "
+
+output_dir: "/mnt/sda1/saksham/TI2AV/ltx_output/test"
 caption_dropout_p: 0.06
 caption_dropout_technique: "zero" # zero, phrase
-dataloader_num_workers: 4
+dataloader_num_workers: 0
 pretrained_model_name_or_path: "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
-
-# if you want to resume from prev checkpoint
-# prev_checkpoint: "/home/eisneim/www/ml/_video_gen/ltx_training/data/mixed/checkpoint-2000"
 
 flow_resolution_shifting: True
 seed: 7136
 
-height: 512
-width: 768
-
-# mixed_precision: "no"
-# batch_size: 4
+mel_bins: 16
+spec_time_bins: 256
 
 mixed_precision: bf16
-batch_size: 6
-train_epochs: 200
+batch_size: 12 #6
+train_epochs: 1000
 
-is_i2v: True
+is_i2v: False
 noise_to_first_frame: 0.2
 train_type: "lora"
 rank: 256
 lora_alpha: 256
-# target_modules: to_q to_k to_v to_out.0
 target_modules: "all-linear"
 gradient_accumulation_steps: 1
 gradient_checkpointing: True
@@ -43,7 +34,6 @@ enable_slicing: True
 enable_tiling: True
 
 optimizer_8bit: True
-# optimizer_torchao: True
 optimizer: adamw
 lr: 2e-5
 lr_scheduler: constant_with_warmup
