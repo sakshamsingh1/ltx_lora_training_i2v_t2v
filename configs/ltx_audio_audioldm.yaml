@@ -1,0 +1,51 @@
+model_name: "ltx_lora"
+id_token: "sounding object, "
+
+output_dir: "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/only_audio_1000"
+caption_dropout_p: 0.06
+caption_dropout_technique: "zero" # zero, phrase
+dataloader_num_workers: 4
+pretrained_model_name_or_path: "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
+
+flow_resolution_shifting: True
+seed: 7136
+
+mel_bins: 16
+spec_time_bins: 256
+
+mixed_precision: bf16
+batch_size: 12 #6
+train_epochs: 1000
+
+is_i2v: False
+noise_to_first_frame: 0.2
+train_type: "lora"
+rank: 256
+lora_alpha: 256
+target_modules: "all-linear"
+gradient_accumulation_steps: 1
+gradient_checkpointing: True
+
+checkpointing_steps: 1000
+checkpointing_limit: 4
+enable_slicing: True
+enable_tiling: True
+
+optimizer_8bit: True
+optimizer: adamw
+lr: 2e-5
+lr_scheduler: constant_with_warmup
+lr_warmup_steps: 100
+lr_num_cycles: 1
+beta1: 0.9
+beta2: 0.95
+weight_decay: 1e-4
+epsilon: 1e-8
+max_grad_norm: 1.0
+
+validation_prompts: ""
+num_validation_videos: 1
+validation_steps: 100000000000000000 # don't do validation
+
+tracker_name: ltx_trainer
+nccl_timeout: 1800

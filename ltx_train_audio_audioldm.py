@@ -228,6 +228,7 @@ class Trainer:
             num_workers=self.args.dataloader_num_workers,
             pin_memory=self.args.pin_memory,
         )
+
     def prepare_models(self):
         logger.info("Initializing models")
         device = self.state.accelerator.device
@@ -473,15 +474,13 @@ class Trainer:
                 logs = {}
 
                 with accelerator.accumulate([ self.transformer ]):
-                    latents, prompt_embeds, prompt_attention_mask, caption, meta_info = batch
+                    latents, prompt_embeds, prompt_attention_mask = batch
                     
                     latents = latents.to(accelerator.device, dtype=weight_dtype).contiguous()
                     prompt_embeds = prompt_embeds.to(accelerator.device, dtype=weight_dtype).contiguous()
                     prompt_attention_mask = prompt_attention_mask.to(accelerator.device, dtype=weight_dtype)
                     batch_size = latents.shape[0]
                     
-                    # 对于precompute的数据，如果直接把emebedding变成0非常容易让网络崩溃
-                    # 更好的方法是，在生成precompute的时候，生成多个text embedd,训练时dataset随机返回带有破损的text embedd
                     # @TODO: 把以下逻辑放到dataset.py
                     if self.args.caption_dropout_technique == "zero":
                         if random.random() < self.args.caption_dropout_p:
@@ -489,8 +488,6 @@ class Trainer:
                             prompt_embeds.fill_(0)
                             prompt_attention_mask.fill_(False)
 
-                            # if "pooled_prompt_embeds" in text_conditions:
-                            #     text_conditions["pooled_prompt_embeds"].fill_(0)
                     # randomly use short phrash embeddings
                     elif self.args.caption_dropout_technique == "phrase":
                         if random.random() < self.args.caption_dropout_p:
@@ -534,12 +531,14 @@ class Trainer:
                         noisy_latents=noisy_latents,
                         prompt_embeds=prompt_embeds, 
                         prompt_attention_mask=prompt_attention_mask,
-                        num_frames=meta_info["num_frames"][0],
-                        height=meta_info["height"][0],
-                        width=meta_info["width"][0],
+                        num_frames=1,
+                        height=self.args.mel_bins,
+                        width=self.args.mel_bins,
                     )
                     target = noise - latents
                     loss = weights.float() * (pred["latents"].float() - target.float()).pow(2)
+                    # TODO: Mask the channels
+
                     if self.args.is_i2v:
                         loss = loss * (1 - conditioning_mask.unsqueeze(-1).repeat(1, 1, loss.size(-1)))
 

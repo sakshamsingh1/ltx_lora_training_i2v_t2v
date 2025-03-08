@@ -82,5 +82,6 @@ class AudioLDM_dataset(Dataset):
         aud_path = os.path.join(self.aud_base_dir, vid + ".wav")
         caption = self.prefix + label + ", " + self.aud_caption[vid]
         latent = self.audio_to_latent([aud_path])
+        embeds, masks = self.to_embedding(caption)
         # todo repeat the latent vector
-        return latent, embeds, data["masks"][index], data["captions"][index], data["meta_info"][index]
+        return latent, embeds, masks

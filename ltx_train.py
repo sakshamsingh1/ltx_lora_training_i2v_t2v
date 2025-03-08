@@ -257,6 +257,7 @@ class Trainer:
                 num_workers=self.args.dataloader_num_workers,
                 pin_memory=self.args.pin_memory,
             )
+            
     def prepare_models(self):
         logger.info("Initializing models")
         device = self.state.accelerator.device
