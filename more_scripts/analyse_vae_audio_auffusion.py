@@ -17,14 +17,6 @@ from librosa.filters import mel as librosa_mel_fn
 from diffusers import AutoencoderKLLTXVideo
 MODEL_ID = "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
 
-SAMPLE_RATE = 16000
-N_FFT = 1024
-HOP_LENGTH = 122 #256
-N_MELS = 128  # for example
-
-MIN_DB = -80.0  # global minimum decibel
-MAX_DB = 0.0    # global maximum decibel
-
 #### helper functions
 def load_latent_models(
     model_id = MODEL_ID,
@@ -35,7 +27,6 @@ def load_latent_models(
         model_id, subfolder="vae", torch_dtype=vae_dtype, revision=revision, cache_dir=cache_dir
     )
     return {"vae": vae}
-
 
 def _pack_latents(latents, patch_size = 1, patch_size_t = 1):
     batch_size, num_channels, num_frames, height, width = latents.shape
@@ -73,23 +64,6 @@ def _normalize_latents(
     else:
         latents = latents * latents_std / scaling_factor + latents_mean
     return latents
-
-def spectrogram_to_audio(mel_255, sample_rate=SAMPLE_RATE):
-    mel_min, mel_max = MIN_DB, MAX_DB
-
-    if mel_255.shape[-1] == 3:
-        mel_255 = mel_255[..., 0]
-
-    mel_norm = mel_255.astype(np.float32) / 255.0
-    mel_db = mel_norm * (mel_max - mel_min) + mel_min  # exact dB range
-    mel_power = librosa.db_to_power(mel_db, ref=1.0)
-
-    melfb = librosa.filters.mel(sr=sample_rate, n_fft=N_FFT, n_mels=mel_power.shape[0])
-    inv_linear = np.dot(np.linalg.pinv(melfb), mel_power)
-
-    # inv_linear = inv_linear.astype(np.float32)
-    audio = librosa.griffinlim(inv_linear, hop_length=HOP_LENGTH, n_iter=32)
-    return audio
 
 def prepare_latents(
     vae,
@@ -293,15 +267,18 @@ class VAEAudioAnalyse:
             # shape: (B=1, 3, H, W)
             spectrogram_decoded = self.vae.decode(latents, timestep, return_dict=False)[0]
 
-        # spectrogram_decoded = spectrogram_decoded[:,:,0][0]
+        # spectrogram_decoded = spectrogram_decoded[:,:,0][0]    
         pcc = VideoProcessor(vae_scale_factor=32)
         vv = pcc.postprocess_video(spectrogram_decoded)[0]
-
         output_spec = torch.from_numpy(vv)[0].permute(2, 0, 1)
+
         output_spec = output_spec.to(device=self.device, dtype=self.dtype)
         denorm_spec = denormalize_spectrogram(output_spec)
-        # import pdb; pdb.set_trace()
         
         spec_audio = self.vocoder.inference(denorm_spec)
         write(save_path, 16000, spec_audio[0])
-        # export_to_wav(spec_audio, save_path)
+        # else:
+        #     spectrogram_decoded = spectrogram_decoded[:,:,0][0]
+        #     denorm_spec = denormalize_spectrogram(spectrogram_decoded)
+        #     spec_audio = self.vocoder.inference(denorm_spec)
+        #     write(save_path, 16000, spec_audio[0])

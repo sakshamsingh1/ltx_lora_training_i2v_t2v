@@ -3,10 +3,12 @@ import json
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
+import torchaudio
+import torch
 
 import json
 from huggingface_hub import snapshot_download
-import audioldm_vae.torch_tools as torch_tools
+# import audioldm_vae.torch_tools as torch_tools
 from audioldm.audio.stft import TacotronSTFT
 from audioldm.variational_autoencoder import AutoencoderKL
 from transformers import T5EncoderModel, T5Tokenizer
@@ -63,7 +65,7 @@ class AudioLDM_dataset(Dataset):
         return vae, stft
     
     def audio_to_latent(self, aud_paths, target_length=512):
-        mel, _, waveform = torch_tools.wav_to_fbank(list(aud_paths), target_length, self.stft, self.device)
+        mel, _, waveform = self.wav_to_fbank(list(aud_paths), target_length, self.stft)
         mel = mel.unsqueeze(1)
         true_latent = self.vae.get_first_stage_encoding(self.vae.encode_first_stage(mel))
         return true_latent
@@ -100,3 +102,71 @@ class AudioLDM_dataset(Dataset):
         
         # todo repeat the latent vector
         return latent, embeds, masks
+    
+    ######################################################### torch_tools.py #########################################################
+
+    def normalize_wav(self, waveform):
+        waveform = waveform - torch.mean(waveform)
+        waveform = waveform / (torch.max(torch.abs(waveform)) + 1e-8)
+        return waveform * 0.5
+
+    def pad_wav(self, waveform, segment_length):
+        waveform_length = len(waveform)
+        
+        if segment_length is None or waveform_length == segment_length:
+            return waveform
+        elif waveform_length > segment_length:
+            return waveform[:segment_length]
+        else:
+            pad_wav = torch.zeros(segment_length - waveform_length).to(waveform.device)
+            waveform = torch.cat([waveform, pad_wav])
+            return waveform
+        
+    def _pad_spec(self, fbank, target_length=1024):
+        batch, n_frames, channels = fbank.shape
+        p = target_length - n_frames
+        if p > 0:
+            pad = torch.zeros(batch, p, channels).to(fbank.device)
+            fbank = torch.cat([fbank, pad], 1)
+        elif p < 0:
+            fbank = fbank[:, :target_length, :]
+
+        if channels % 2 != 0:
+            fbank = fbank[:, :, :-1]
+
+        return fbank
+
+    def read_wav_file(self, filename, segment_length):
+        waveform, sr = torchaudio.load(filename)  # Faster!!!
+        waveform = torchaudio.functional.resample(waveform, orig_freq=sr, new_freq=16000)[0]
+        try:
+            waveform = self.normalize_wav(waveform)
+        except:
+            print ("Exception normalizing:", filename)
+            waveform = torch.ones(160000)
+        waveform = self.pad_wav(waveform, segment_length).unsqueeze(0)
+        waveform = waveform / torch.max(torch.abs(waveform))
+        waveform = 0.5 * waveform
+        return waveform
+
+    def get_mel_from_wav(self, audio, _stft):
+        audio = torch.nan_to_num(torch.clip(audio, -1, 1))
+        audio = torch.autograd.Variable(audio, requires_grad=False)
+        audio = audio.to(self.device)
+        melspec, log_magnitudes_stft, energy = _stft.mel_spectrogram(audio)
+        return melspec, log_magnitudes_stft, energy
+
+    def wav_to_fbank(self, paths, target_length=1024, fn_STFT=None):
+        assert fn_STFT is not None
+
+        waveform = torch.cat([self.read_wav_file(path, target_length * 160) for path in paths], 0)  # hop size is 160
+
+        fbank, log_magnitudes_stft, energy = self.get_mel_from_wav(waveform, fn_STFT)
+        fbank = fbank.transpose(1, 2)
+        log_magnitudes_stft = log_magnitudes_stft.transpose(1, 2)
+
+        fbank, log_magnitudes_stft = self._pad_spec(fbank, target_length), self._pad_spec(
+            log_magnitudes_stft, target_length
+        )
+
+        return fbank, log_magnitudes_stft, waveform

@@ -6,7 +6,7 @@ import torch
 from pipeline_stg_ltx_image2video import LTXImageToVideoSTGPipeline
 from diffusers.utils import export_to_video, load_image
 
-USE_ORIG_MODEL = False
+USE_ORIG_MODEL = True
 
 # width = 1024
 # height = 576
@@ -15,7 +15,7 @@ USE_ORIG_MODEL = False
 width = 768
 height = 512
 num_frames=121
-lora_path = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/mixed/"
+lora_path = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/mixed_121x256x256/"
 prefix = "" 
 negative_prompt = "worst quality, inconsistent motion, blurry, jittery, distorted"
 NUM_INF = 5
@@ -24,11 +24,11 @@ images_dir = "/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/first_fra
 
 LORA_WEIGHT = 0.8 #0.8
 # images_dir = "data/portrait_img/"
-output_dir = "/home/sxk230060/TI2AV/misc/ltx_lora_training_i2v_t2v/outputs/temp_768_512"
+output_dir = "/home/sxk230060/TI2AV/misc/ltx_lora_training_i2v_t2v/outputs/"
 
 if USE_ORIG_MODEL:
     LORA_WEIGHT = 0.0 #0.8
-    output_dir = "outputs/output_test_orig"
+    output_dir = "/home/sxk230060/TI2AV/misc/ltx_lora_training_i2v_t2v/outputs/output_orig_1"
 
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)

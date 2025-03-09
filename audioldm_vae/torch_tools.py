@@ -52,7 +52,7 @@ def read_wav_file(filename, segment_length):
 def get_mel_from_wav(audio, _stft, device="cuda:0"):
     audio = torch.nan_to_num(torch.clip(audio, -1, 1))
     audio = torch.autograd.Variable(audio, requires_grad=False)
-    audio = audio.to(device)
+    # audio = audio.to(device)
     melspec, log_magnitudes_stft, energy = _stft.mel_spectrogram(audio)
     return melspec, log_magnitudes_stft, energy
 

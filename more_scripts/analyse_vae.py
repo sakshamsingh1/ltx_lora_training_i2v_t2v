@@ -114,7 +114,7 @@ class VAE_analyse:
         self.dtype = torch.bfloat16
         self.vae = load_latent_models()["vae"].to(self.device, dtype=self.dtype)
 
-    def img_to_latent(self, frame_path, w = 512, h = 768):
+    def img_to_latent(self, frame_path, w = 768, h = 512):
         frame = get_frame(frame_path, w, h)
         frame_t = to_tensor(frame, self.device, self.dtype)
 
@@ -128,7 +128,7 @@ class VAE_analyse:
 
         return data["latents"].cpu().to(self.dtype)
 
-    def latent_to_img(self, img_latent, save_path, w = 512, h = 768):
+    def latent_to_img(self, img_latent, save_path, w = 768, h = 512):
         num_frames = 1
         img_latent = img_latent.to(self.device, self.dtype)
         img_latent = _unpack_latents(img_latent, (num_frames+7)//8, h//32, w//32)
@@ -138,17 +138,8 @@ class VAE_analyse:
         timestep = torch.tensor([0.05], device=self.device, dtype=self.dtype)
         with torch.no_grad():
             image =  self.vae.decode(img_latent, timestep, return_dict=False)[0]
+
         pcc = VideoProcessor(vae_scale_factor=32)
         vv = pcc.postprocess_video(image)[0]
 
         export_to_video(vv, save_path, fps=24)
-
-
-
-
-
-
-
-
-
-

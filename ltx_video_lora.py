@@ -9,7 +9,6 @@ from transformers import T5EncoderModel, T5Tokenizer
 from PIL import Image
 from diffusers.utils.torch_utils import randn_tensor
 
-
 logger = get_logger("ltx_train")  # pylint: disable=invalid-name
 MODEL_ID = "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
 # MODEL_ID = "./data/fused"
@@ -333,28 +332,29 @@ def gen_noise_from_first_frame_latent(frame_latent, latent_num_frames,
                                      latent_height=18, latent_width=32, 
                                      vae_spatial_compression_ratio=32,
                                      vae_temporal_compression_ratio=8, generator=None, noise_to_first_frame=0.05):
+    
     num_channels_latents = frame_latent.size(-1) # 128
-    batch_size = frame_latent.size(0)
+    batch_size = frame_latent.size(0) # 6
     # latent_num_frames = (num_frames - 1) // vae_temporal_compression_ratio + 1
 
-    shape = (batch_size, num_channels_latents, latent_num_frames, latent_height, latent_width)
-    mask_shape = (batch_size, 1, latent_num_frames, latent_height, latent_width)
+    shape = (batch_size, num_channels_latents, latent_num_frames, latent_height, latent_width) # (6, 128, 16, 16, 24)
+    mask_shape = (batch_size, 1, latent_num_frames, latent_height, latent_width) # (6, 1, 16, 16, 24)
     # 因为最开始生成数据集时不小心pack了第一帧所以现在多做这一步
-    init_latents = unpack_latents(frame_latent, 1, latent_height, latent_width)
-    init_latents = init_latents.repeat(1, 1, latent_num_frames, 1, 1)
-    conditioning_mask = torch.zeros(mask_shape, device=frame_latent.device, dtype=frame_latent.dtype)
+    init_latents = unpack_latents(frame_latent, 1, latent_height, latent_width) # (6, 128, 1, 16, 24)
+    init_latents = init_latents.repeat(1, 1, latent_num_frames, 1, 1) # (6, 128, 16, 16, 24)
+    conditioning_mask = torch.zeros(mask_shape, device=frame_latent.device, dtype=frame_latent.dtype) # (6, 1, 16, 16, 24)
     conditioning_mask[:, :, 0] = 1.0
 
     rand_noise_ff = random.random() * noise_to_first_frame
 
-    first_frame_mask = conditioning_mask.clone() 
-    first_frame_mask[:, :, 0] = 1.0 - rand_noise_ff
+    first_frame_mask = conditioning_mask.clone()  # (6, 1, 16, 16, 24)
+    first_frame_mask[:, :, 0] = 1.0 - rand_noise_ff # (6, 1, 16, 16, 24)
 
-    noise = randn_tensor(shape, generator=generator, device=frame_latent.device, dtype=frame_latent.dtype)
-    latents = init_latents * first_frame_mask + noise * (1 - first_frame_mask)
+    noise = randn_tensor(shape, generator=generator, device=frame_latent.device, dtype=frame_latent.dtype) # (6, 128, 16, 16, 24)
+    latents = init_latents * first_frame_mask + noise * (1 - first_frame_mask) # (6, 128, 16, 16, 24)
 
-    conditioning_mask = _pack_latents(conditioning_mask).squeeze(-1)
-    latents = _pack_latents(latents)
+    conditioning_mask = _pack_latents(conditioning_mask).squeeze(-1) # (6, 6144)
+    latents = _pack_latents(latents) # (6, 6144, 128)
 
     return latents, conditioning_mask
 

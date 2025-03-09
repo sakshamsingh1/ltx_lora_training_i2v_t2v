@@ -577,7 +577,6 @@ class Trainer:
                     sigmas = scheduler_sigmas[indices]
                     timesteps = (sigmas * 1000.0).long()
 
-
                     # print("timesteps", timesteps.shape, timesteps)
                     # print("first_frame should be (batch, packed, 128)", first_frame.shape,  meta_info["num_frames"][0], meta_info["height"][0], meta_info["width"][0])
                     if self.args.is_i2v:
@@ -769,7 +768,7 @@ class Trainer:
 
 
 def main():
-    trainer = Trainer("configs/ltx_new.yaml")
+    trainer = Trainer("configs/ltx.yaml")
 
     trainer.prepare_dataset()
     trainer.prepare_models()

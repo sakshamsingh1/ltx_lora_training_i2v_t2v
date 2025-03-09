@@ -532,7 +532,7 @@ class Trainer:
                         prompt_attention_mask=prompt_attention_mask,
                         num_frames=1,
                         height=self.args.mel_bins,
-                        width=self.args.mel_bins,
+                        width=self.args.spec_time_bins,
                     )
                     target = noise - latents
                     loss = weights.float() * (pred["latents"].float() - target.float()).pow(2)
@@ -676,5 +676,5 @@ def main():
     trainer.evaluate()
 
 if __name__ == "__main__":
-  
+    # torch.multiprocessing.set_start_method('fork')
     main()
