@@ -1,8 +1,6 @@
 model_name: "ltx_lora"
 id_token: "sounding object, "
 
-prefix: "sounding object, "
-
 output_dir: "/mnt/sda1/saksham/TI2AV/ltx_output/test"
 caption_dropout_p: 0.06
 caption_dropout_technique: "zero" # zero, phrase

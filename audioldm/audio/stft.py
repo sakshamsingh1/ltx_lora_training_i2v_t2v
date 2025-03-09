@@ -50,8 +50,8 @@ class STFT(torch.nn.Module):
         self.register_buffer("inverse_basis", inverse_basis.float())
 
     def transform(self, input_data):
-        # device = self.forward_basis.device
-        # input_data = input_data.to(device)
+        device = self.forward_basis.device
+        input_data = input_data.to(device)
         
         num_batches = input_data.size(0)
         num_samples = input_data.size(1)

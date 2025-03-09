@@ -29,21 +29,16 @@ def _normalize_latents(
         latents = latents * latents_std / scaling_factor + latents_mean
     return latents
 
-vid = 'GH7N7v_m9FM_000030_000040_4.5_10.0'
-file = f"/mnt/sda1/saksham/TI2AV/others/ltx_lora_training_i2v_t2v/cacheNew_121x256x256/{vid}.pt"
+vid = 'B9ZQfpwK--8_000050_000060_0.0_3.5'
+file = f"/mnt/sda1/saksham/TI2AV/ltx_output/audioldm_cache/{vid}.pt"
 data = torch.load(file)
 ll = data["latents"][0].unsqueeze(0)
 print(ll.shape)
 
-# num_frames = 121; height = 512; width = 768
-num_frames = 121; height = 256; width = 256
-lt = _unpack_latents(ll.to(device, dtype=dtype), (num_frames+7)//8, height//32, width//32)
+num_frames = 1; height = 16; width = 128
+lt = _unpack_latents(ll.to(device, dtype=dtype), 1, 16, 128)
 # denormolize
 lt = _normalize_latents(lt, vae.latents_mean, vae.latents_std, reverse=True)
-
-print(lt.shape)
-
-timestep = torch.tensor([0.05], device=device, dtype=dtype)
 
 with torch.no_grad():
     video =  vae.decode(lt, timestep, return_dict=False)[0]

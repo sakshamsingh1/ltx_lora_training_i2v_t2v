@@ -49,20 +49,19 @@ def read_wav_file(filename, segment_length):
     return waveform
 
 
-def get_mel_from_wav(audio, _stft, device="cuda:0"):
+def get_mel_from_wav(audio, _stft):
     audio = torch.nan_to_num(torch.clip(audio, -1, 1))
     audio = torch.autograd.Variable(audio, requires_grad=False)
-    # audio = audio.to(device)
     melspec, log_magnitudes_stft, energy = _stft.mel_spectrogram(audio)
     return melspec, log_magnitudes_stft, energy
 
 
-def wav_to_fbank(paths, target_length=1024, fn_STFT=None, device="cuda:0"):
+def wav_to_fbank(paths, target_length=1024, fn_STFT=None):
     assert fn_STFT is not None
 
     waveform = torch.cat([read_wav_file(path, target_length * 160) for path in paths], 0)  # hop size is 160
 
-    fbank, log_magnitudes_stft, energy = get_mel_from_wav(waveform, fn_STFT, device=device)
+    fbank, log_magnitudes_stft, energy = get_mel_from_wav(waveform, fn_STFT)
     fbank = fbank.transpose(1, 2)
     log_magnitudes_stft = log_magnitudes_stft.transpose(1, 2)
 
