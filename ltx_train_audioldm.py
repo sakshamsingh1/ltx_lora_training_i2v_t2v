@@ -24,7 +24,7 @@ from diffusers.training_utils import (
     compute_density_for_timestep_sampling,
     compute_loss_weighting_for_sd3,
 )
-from audio_helpers.audioldm_vae.dataset_audio_audioldm import AudioLDM_dataset
+from audioldm_vae.dataset_audioldm import MixedBatchSampler, PrecomputedDataset, MultiDatasetWraper
 from peft import LoraConfig, get_peft_model_state_dict, set_peft_model_state_dict
 from tqdm import tqdm
 from transformers import Conv1D
@@ -39,7 +39,6 @@ from accelerate.utils import (
     gather_object,
 )
 # ----------------------------------------------------
-from ltx_lora_training_i2v_t2v.audio_helpers.audioldm_vae.dataset_audio_audioldm import AudioLDM_VAE
 from ltx_video_lora import *
 # ----------------------------------------------------
 from utils.file_utils import find_files, delete_files, string_to_filename
@@ -221,13 +220,36 @@ class Trainer:
     def prepare_dataset(self) -> None:
         logger.info("Initializing dataset and dataloader")
 
-        self.dataset = AudioLDM_dataset(device=self.state.accelerator.device, split="train", prefix=self.prefix)
-        self.dataloader = torch.utils.data.DataLoader(
-            self.dataset,
-            batch_size=self.args.batch_size,
-            num_workers=self.args.dataloader_num_workers,
-            pin_memory=self.args.pin_memory,
-        )
+        if self.args.precomputed_datasets is not None:
+            print("use mixed datasets", self.args.precomputed_datasets)
+            list_of_datasets = [ PrecomputedDataset(data_root) for data_root in self.args.precomputed_datasets]
+            dataset_indices = MultiDatasetWraper.calc_index_for_multi_datasets(list_of_datasets)
+
+            mixed_batch_sampler = MixedBatchSampler(dataset_indices, batch_size=self.args.batch_size)
+
+            self.dataset = MultiDatasetWraper(list_of_datasets)
+            self.dataloader = torch.utils.data.DataLoader(
+                dataset=self.dataset,
+                batch_sampler=mixed_batch_sampler,
+                num_workers=self.args.dataloader_num_workers,
+                pin_memory=self.args.pin_memory,
+            )
+        else:
+            self.dataset = PrecomputedDataset(data_dir=self.args.data_root)
+            self.dataloader = torch.utils.data.DataLoader(
+                self.dataset,
+                batch_size=self.args.batch_size,
+                num_workers=self.args.dataloader_num_workers,
+                pin_memory=self.args.pin_memory,
+            )
+
+        # self.dataset = PrecomputedDataset(self.args.cache_dir)
+        # self.dataloader = torch.utils.data.DataLoader(
+        #     self.dataset,
+        #     batch_size=self.args.batch_size,
+        #     num_workers=self.args.dataloader_num_workers,
+        #     pin_memory=self.args.pin_memory,
+        # )
 
     def prepare_models(self):
         logger.info("Initializing models")
@@ -474,7 +496,8 @@ class Trainer:
                 logs = {}
 
                 with accelerator.accumulate([ self.transformer ]):
-                    latents, prompt_embeds, prompt_attention_mask = batch
+                    # latents, prompt_embeds, prompt_attention_mask = batch[0], batch[1], batch[2]
+                    latents, prompt_embeds, prompt_attention_mask, caption, meta_info = batch
                     
                     latents = latents.to(accelerator.device, dtype=weight_dtype).contiguous()
                     prompt_embeds = prompt_embeds.to(accelerator.device, dtype=weight_dtype).contiguous()
@@ -524,6 +547,7 @@ class Trainer:
                     weights = compute_loss_weighting_for_sd3(
                         weighting_scheme=self.args.flow_weighting_scheme, sigmas=sigmas
                     ).reshape(-1, 1, 1).repeat(1, 1, latents.size(-1))
+                    
                     pred = self.model_config["forward_pass"](
                         transformer=self.transformer, 
                         timesteps=timesteps, 
@@ -533,14 +557,20 @@ class Trainer:
                         prompt_attention_mask=prompt_attention_mask,
                         num_frames=1,
                         height=self.args.mel_bins,
-                        width=self.args.mel_bins,
+                        width=self.args.spec_time_bins,
                     )
                     target = noise - latents
-                    loss = weights.float() * (pred["latents"].float() - target.float()).pow(2)
                     # TODO: Mask the channels
+                    # loss = weights.float() * (pred["latents"].float() - target.float()).pow(2)
+                    loss = weights.float() * (pred["latents"].float() - target.float()).pow(2)
+                    
+                    mask = torch.zeros_like(loss)
+                    mask[:, :, :8] = 1  # Keep only the first 8 channels
+                    loss = loss * mask
 
                     if self.args.is_i2v:
                         loss = loss * (1 - conditioning_mask.unsqueeze(-1).repeat(1, 1, loss.size(-1)))
+
 
                     loss = loss.mean(list(range(1, loss.ndim)))
                     loss = loss.mean()
@@ -664,7 +694,7 @@ class Trainer:
         plt.close()
 
 def main():
-    trainer = Trainer("configs/ltx_audio_audioldm.yaml")
+    trainer = Trainer("configs/ltx_audioldm.yaml")
 
     trainer.prepare_dataset()
     trainer.prepare_models()
@@ -677,7 +707,5 @@ def main():
     trainer.evaluate()
 
 if __name__ == "__main__":
-  
+    # torch.multiprocessing.set_start_method('fork')
     main()
-    
-  

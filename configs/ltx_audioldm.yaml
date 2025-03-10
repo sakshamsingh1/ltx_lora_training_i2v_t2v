@@ -1,11 +1,17 @@
 model_name: "ltx_lora"
 id_token: "sounding object, "
 
-output_dir: "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/only_audio_1000"
+precomputed_datasets: # a list of folder contain defferient resolutions and frames
+  - "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/audioldm_cache"
+
+# cache_dir: 
+output_dir: "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/audioldm_lora"
 caption_dropout_p: 0.06
 caption_dropout_technique: "zero" # zero, phrase
-dataloader_num_workers: 4
+dataloader_num_workers: 0
 pretrained_model_name_or_path: "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
+
+# pin_memory: False
 
 flow_resolution_shifting: True
 seed: 7136
