@@ -24,8 +24,7 @@ from diffusers.training_utils import (
     compute_density_for_timestep_sampling,
     compute_loss_weighting_for_sd3,
 )
-from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
-from diffusers.utils import export_to_video, load_image, load_video
+from audio_helpers.dataset_audio import MixedBatchSampler, PrecomputedDataset, MultiDatasetWraper
 from peft import LoraConfig, get_peft_model_state_dict, set_peft_model_state_dict
 from tqdm import tqdm
 from transformers import Conv1D
@@ -40,7 +39,6 @@ from accelerate.utils import (
     gather_object,
 )
 # ----------------------------------------------------
-from audio_helpers.dataset_audio import MixedBatchSampler, PrecomputedDataset, MultiDatasetWraper
 from ltx_video_lora import *
 # ----------------------------------------------------
 from utils.file_utils import find_files, delete_files, string_to_filename
@@ -123,26 +121,16 @@ class Trainer:
         cd.setdefault("prev_checkpoint", None)
         cd.setdefault("pretrained_model_name_or_path", "a-r-r-o-w/LTX-Video-0.9.1-diffusers")
         
-        # cd.setdefault("enable_slicing", False)
-        # cd.setdefault("enable_tiling", False)
-        
         args = argparse.Namespace(**cd)
         args.lr = float(args.lr)
         args.epsilon = float(args.epsilon)
         args.weight_decay = float(args.weight_decay)
-        # args.target_modules = args.target_modules.split(" ") if args.target_modules != "all-linear" else "all-linear"
 
         self.args = args
         self.state = State()
 
-        # Tokenizers
         self.tokenizer = None
-        # self.tokenizer_2 = None
-        # self.tokenizer_3 = None
-        # Text encoders
         self.text_encoder = None
-        # self.text_encoder_2 = None
-        # self.text_encoder_3 = None
 
         # Denoisers
         self.transformer = None
@@ -254,6 +242,15 @@ class Trainer:
                 num_workers=self.args.dataloader_num_workers,
                 pin_memory=self.args.pin_memory,
             )
+
+        # self.dataset = PrecomputedDataset(self.args.cache_dir)
+        # self.dataloader = torch.utils.data.DataLoader(
+        #     self.dataset,
+        #     batch_size=self.args.batch_size,
+        #     num_workers=self.args.dataloader_num_workers,
+        #     pin_memory=self.args.pin_memory,
+        # )
+
     def prepare_models(self):
         logger.info("Initializing models")
         device = self.state.accelerator.device
@@ -266,17 +263,10 @@ class Trainer:
 
     @staticmethod
     def get_all_linear_names(model):
-        # Create a list to store the layer names
         layer_names = []
-        
-        # Recursively visit all modules and submodules
         for name, module in model.named_modules():
-            # Check if the module is an instance of the specified layers
             if isinstance(module, (torch.nn.Linear, torch.nn.Embedding, torch.nn.Conv2d, Conv1D)):
-                # model name parsing 
-
                 layer_names.append(name)
-        
         return layer_names
 
     def prepare_trainable_parameters(self):
@@ -506,6 +496,7 @@ class Trainer:
                 logs = {}
 
                 with accelerator.accumulate([ self.transformer ]):
+                    # latents, prompt_embeds, prompt_attention_mask = batch[0], batch[1], batch[2]
                     latents, prompt_embeds, prompt_attention_mask, caption, meta_info = batch
                     
                     latents = latents.to(accelerator.device, dtype=weight_dtype).contiguous()
@@ -513,8 +504,6 @@ class Trainer:
                     prompt_attention_mask = prompt_attention_mask.to(accelerator.device, dtype=weight_dtype)
                     batch_size = latents.shape[0]
                     
-                    # 对于precompute的数据，如果直接把emebedding变成0非常容易让网络崩溃
-                    # 更好的方法是，在生成precompute的时候，生成多个text embedd,训练时dataset随机返回带有破损的text embedd
                     # @TODO: 把以下逻辑放到dataset.py
                     if self.args.caption_dropout_technique == "zero":
                         if random.random() < self.args.caption_dropout_p:
@@ -522,8 +511,6 @@ class Trainer:
                             prompt_embeds.fill_(0)
                             prompt_attention_mask.fill_(False)
 
-                            # if "pooled_prompt_embeds" in text_conditions:
-                            #     text_conditions["pooled_prompt_embeds"].fill_(0)
                     # randomly use short phrash embeddings
                     elif self.args.caption_dropout_technique == "phrase":
                         if random.random() < self.args.caption_dropout_p:
@@ -542,17 +529,10 @@ class Trainer:
                     sigmas = scheduler_sigmas[indices]
                     timesteps = (sigmas * 1000.0).long()
 
-
-                    # print("timesteps", timesteps.shape, timesteps)
-                    # print("first_frame should be (batch, packed, 128)", first_frame.shape,  meta_info["num_frames"][0], meta_info["height"][0], meta_info["width"][0])
                     if self.args.is_i2v:
                         noise, conditioning_mask = gen_noise_from_first_frame_latent(first_frame, meta_info["num_frames"][0], meta_info["height"][0], meta_info["width"][0], noise_to_first_frame=self.args.noise_to_first_frame)
                         # do not denoise first frame
                         timesteps = timesteps.unsqueeze(-1) * (1 - conditioning_mask)
-                        # print("maske applied timesteps", timesteps.shape, timesteps)
-                        # print("sigmas", sigmas.shape)
-                        # print("conditioning_mask", conditioning_mask.shape)
-
                     else:
                         noise = torch.randn(
                             latents.shape,
@@ -561,17 +541,13 @@ class Trainer:
                             dtype=weight_dtype,
                         )
                     ss= sigmas.reshape(-1, 1, 1).repeat(1, 1, latents.size(-1))
-                    # print("ss sigmas", ss.shape, latents.shape)
-                    # print(ss)
-                    # assert False
-
                     noisy_latents = (1.0 - ss) * latents + ss * noise
 
                     # These weighting schemes use a uniform timestep sampling and instead post-weight the loss
                     weights = compute_loss_weighting_for_sd3(
                         weighting_scheme=self.args.flow_weighting_scheme, sigmas=sigmas
                     ).reshape(-1, 1, 1).repeat(1, 1, latents.size(-1))
-                    # print("weights", weights)
+                    
                     pred = self.model_config["forward_pass"](
                         transformer=self.transformer, 
                         timesteps=timesteps, 
@@ -579,19 +555,21 @@ class Trainer:
                         noisy_latents=noisy_latents,
                         prompt_embeds=prompt_embeds, 
                         prompt_attention_mask=prompt_attention_mask,
-                        num_frames=meta_info["num_frames"][0],
-                        height=meta_info["height"][0],
-                        width=meta_info["width"][0],
+                        num_frames=1,
+                        height=self.args.mel_bins,
+                        width=self.args.spec_time_bins,
                     )
                     target = noise - latents
+                    import pdb; pdb.set_trace()
+                    # TODO: Mask the channels
+                    # loss = weights.float() * (pred["latents"].float() - target.float()).pow(2)
                     loss = weights.float() * (pred["latents"].float() - target.float()).pow(2)
+                    
+
                     if self.args.is_i2v:
-                        # print("loss", loss.shape, conditioning_mask.shape)
                         loss = loss * (1 - conditioning_mask.unsqueeze(-1).repeat(1, 1, loss.size(-1)))
 
-                    # Average loss across channel dimension
                     loss = loss.mean(list(range(1, loss.ndim)))
-                    # Average loss across batch dimension
                     loss = loss.mean()
                     assert torch.isnan(loss) == False, "NaN loss detected"
                     accelerator.backward(loss)
@@ -614,11 +592,7 @@ class Trainer:
                     progress_bar.update(1)
                     global_step += 1
 
-                    # if global_step == 10 and self.accelerator.is_main_process:
-                    #     self.plot_loss()
-
                     # Checkpointing
-                    # accelerator.distributed_type == DistributedType.DEEPSPEED or 
                     if accelerator.is_main_process:
                         self.losses.append(loss.item())
 
@@ -635,7 +609,6 @@ class Trainer:
 
                             logger.info(f"Checkpointing at step {global_step}")
                             save_path = os.path.join(self.args.output_dir, f"checkpoint-{global_step}")
-                            # accelerator.wait_for_everyone()
                             accelerator.save_state(save_path)
                             logger.info(f"Saved state to {save_path}")
                             # ---------------
@@ -659,14 +632,6 @@ class Trainer:
 
             memory_statistics = get_memory_statistics()
             logger.info(f"Memory after epoch {epoch + 1}: {json.dumps(memory_statistics, indent=4)}")
-
-            # Maybe run validation
-            # should_run_validation = (
-            #     self.args.validation_every_n_epochs is not None
-            #     and (epoch + 1) % self.args.validation_every_n_epochs == 0
-            # )
-            # if should_run_validation:
-            #     self.validate(global_step)
 
         accelerator.wait_for_everyone()
         if accelerator.is_main_process:
@@ -703,10 +668,7 @@ class Trainer:
 
     def plot_loss(self, show_plot=False):
         plt.rcParams["figure.figsize"] = (10,5)
-        # fig = plt.figure(figsize=(20, 10))
-
         m = len(self.dataloader)
-
         y = np.array(self.losses)
         x = np.arange(y.shape[0], dtype=y.dtype)
         x /= m
@@ -728,11 +690,6 @@ class Trainer:
             plt.show()
         plt.close()
 
-
-        
-# trainer = Trainer("ltx_training/configs/ltx.yaml")
-
-
 def main():
     trainer = Trainer("configs/ltx_audio.yaml")
 
@@ -743,15 +700,9 @@ def main():
     trainer.prepare_for_training()
     trainer.prepare_trackers()
 
-    # print(">>> load prev state")
-    # trainer.state.accelerator.load_state("/home/eisneim/www/ml/_video_gen/ltx_training/data/checkpoint-9000")
-
     trainer.train()
     trainer.evaluate()
 
-
 if __name__ == "__main__":
-  
+    # torch.multiprocessing.set_start_method('fork')
     main()
-    
-  

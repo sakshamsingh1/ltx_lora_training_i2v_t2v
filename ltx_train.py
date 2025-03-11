@@ -770,7 +770,7 @@ class Trainer:
 
 
 def main():
-    trainer = Trainer("configs/ltx_new.yaml")
+    trainer = Trainer("configs/ltx.yaml")
 
     trainer.prepare_dataset()
     trainer.prepare_models()

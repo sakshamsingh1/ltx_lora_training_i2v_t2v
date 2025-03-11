@@ -205,6 +205,7 @@ def forward_pass(
     frame_rate = 25
     latent_frame_rate = frame_rate / 8
     spatial_compression_ratio = 32
+    # spatial_compression_ratio = 8
     # [0.32, 32, 32]
     rope_interpolation_scale = [1 / latent_frame_rate, spatial_compression_ratio, spatial_compression_ratio]
     # rope_interpolation_scale = [1 / 25, 32, 32]

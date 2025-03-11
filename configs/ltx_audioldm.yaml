@@ -8,7 +8,7 @@ precomputed_datasets: # a list of folder contain defferient resolutions and fram
 output_dir: "/mnt/ssd0/saksham/i2av/ltx_lora_training_i2v_t2v/audioldm_lora"
 caption_dropout_p: 0.06
 caption_dropout_technique: "zero" # zero, phrase
-dataloader_num_workers: 0
+dataloader_num_workers: 8
 pretrained_model_name_or_path: "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
 
 # pin_memory: False
@@ -20,7 +20,7 @@ mel_bins: 16
 spec_time_bins: 256
 
 mixed_precision: bf16
-batch_size: 12 #6
+batch_size: 24 #6
 train_epochs: 1000
 
 is_i2v: False

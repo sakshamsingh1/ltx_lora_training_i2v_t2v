@@ -55,7 +55,6 @@ LOG_LEVEL = "INFO"
 logger = get_logger("ltxtrainer")
 logger.setLevel(LOG_LEVEL)
 
-
 class State:
     # Training state
     seed: int = None
@@ -560,17 +559,16 @@ class Trainer:
                         width=self.args.spec_time_bins,
                     )
                     target = noise - latents
-                    # TODO: Mask the channels
-                    # loss = weights.float() * (pred["latents"].float() - target.float()).pow(2)
+                    
                     loss = weights.float() * (pred["latents"].float() - target.float()).pow(2)
                     
+                    # Mask the channels
                     mask = torch.zeros_like(loss)
                     mask[:, :, :8] = 1  # Keep only the first 8 channels
                     loss = loss * mask
 
                     if self.args.is_i2v:
                         loss = loss * (1 - conditioning_mask.unsqueeze(-1).repeat(1, 1, loss.size(-1)))
-
 
                     loss = loss.mean(list(range(1, loss.ndim)))
                     loss = loss.mean()

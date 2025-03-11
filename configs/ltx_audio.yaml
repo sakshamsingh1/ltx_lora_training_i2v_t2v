@@ -23,7 +23,7 @@ spec_time_bins: 512
 # batch_size: 4
 
 mixed_precision: bf16
-batch_size: 12 #6
+batch_size: 6
 train_epochs: 1000
 
 is_i2v: False
