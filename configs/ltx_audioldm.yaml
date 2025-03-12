@@ -17,7 +17,7 @@ flow_resolution_shifting: True
 seed: 7136
 
 mel_bins: 16
-spec_time_bins: 256
+spec_time_bins: 128
 
 mixed_precision: bf16
 batch_size: 24 #6
