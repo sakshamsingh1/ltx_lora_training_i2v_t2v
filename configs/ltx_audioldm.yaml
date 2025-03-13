@@ -12,6 +12,7 @@ dataloader_num_workers: 8
 pretrained_model_name_or_path: "a-r-r-o-w/LTX-Video-0.9.1-diffusers"
 
 # pin_memory: False
+report_to: wandb
 
 flow_resolution_shifting: True
 seed: 7136

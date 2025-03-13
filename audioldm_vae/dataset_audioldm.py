@@ -30,7 +30,7 @@ class PrecomputedDataset(torch.utils.data.Dataset):
         except:
             print(">>> error file:", dpath)
             data = torch.load(self.data[idx + 1])
-        data["captions"] = ['']
+        # data["captions"] = ['']
 
         index = random.randint(0, len(data["captions"]) - 1)
         latent, embeds = data["latents"][index], data["embeds"][index]
